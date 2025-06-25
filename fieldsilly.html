@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document to Form Generator - Perfect Overlay</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE'
+                    }
+                }
+            }
+        }
+        // Set PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            box-sizing: border-box;
+        }
+        
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overflow-x: hidden;
+        }
+        
+        .loading-spinner {
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .form-overlay {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .form-field {
+            position: absolute;
+            border: 2px solid transparent;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            min-width: 40px;
+            min-height: 20px;
+            z-index: 10;
+        }
+        
+        .form-field:hover {
+            border-color: #5D5CDE;
+            background-color: rgba(93, 92, 222, 0.1);
+        }
+        
+        .form-field:focus {
+            border-color: #5D5CDE;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(93, 92, 222, 0.1);
+            z-index: 20;
+        }
+        
+        .document-container {
+            max-width: 100%;
+            margin: 0 auto;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .mode-toggle {
+            transition: all 0.3s ease;
+        }
+        
+        .progress-bar {
+            transition: width 0.3s ease;
+        }
+        
+        /* Responsive improvements */
+        @media (max-width: 768px) {
+            .xl\:col-span-2 {
+                grid-column: span 1;
+            }
+            
+            .xl\:grid-cols-3 {
+                grid-template-columns: 1fr;
+            }
+            
+            .form-field {
+                min-width: 60px;
+                min-height: 30px;
+                font-size: 14px !important;
+            }
+        }
+        
+        /* Canvas styling */
+        #originalCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+        
+        /* Hide scrollbars while keeping functionality */
+        .overflow-y-auto {
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 transparent;
+        }
+        
+        .overflow-y-auto::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .overflow-y-auto::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        
+        .overflow-y-auto::-webkit-scrollbar-thumb {
+            background-color: #cbd5e0;
+            border-radius: 3px;
+        }
+        
+        .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+            background-color: #a0aec0;
+        }
+        
+        /* Dark mode improvements */
+        .dark .overflow-y-auto::-webkit-scrollbar-thumb {
+            background-color: #4a5568;
+        }
+        
+        .dark .overflow-y-auto::-webkit-scrollbar-thumb:hover {
+            background-color: #2d3748;
+        }
+    </style>
+</head>
+<body class="min-h-full bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="max-w-7xl mx-auto p-4 sm:p-6 lg:p-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent mb-2">
+                Document to Form Generator
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400 text-base sm:text-lg">
+                สร้างฟอร์มที่เหมือนเอกสารต้นฉบับ 100% ด้วย AI และ OCR
+            </p>
+        </div>
+
+        <div class="grid xl:grid-cols-3 gap-6">
+            <!-- Left Panel: Setup & Controls -->
+            <div class="space-y-6">
+                <!-- Processing Mode -->
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                        </svg>
+                        โหมดการประมวลผล
+                    </h2>
+                    <div class="space-y-3">
+                        <div class="flex bg-gray-200 dark:bg-gray-700 rounded-lg p-1 mode-toggle">
+                            <button id="simpleMode" onclick="setProcessingMode('simple')" 
+                                    class="flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all bg-primary text-white">
+                                โหมดธรรมดา (OCR)
+                            </button>
+                            <button id="advancedMode" onclick="setProcessingMode('advanced')" 
+                                    class="flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all text-gray-700 dark:text-gray-300">
+                                โหมดแอดวานซ์ (AI)
+                            </button>
+                        </div>
+                        <div class="text-xs text-gray-600 dark:text-gray-400">
+                            <span id="modeDescription">ใช้ Tesseract OCR - ทำงานออฟไลน์ได้</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- API Key Setup (Advanced Mode Only) -->
+                <div id="apiKeySection" class="hidden bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M18 8a6 6 0 01-7.743 5.743L10 14l-1 1-1 1H6v2H2v-4l4.257-4.257A6 6 0 1118 8zm-6-4a1 1 0 100 2 2 2 0 012 2 1 1 0 102 0 4 4 0 00-4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        Google Vision API
+                    </h2>
+                    <div class="space-y-3">
+                        <input type="password" 
+                               id="apiKey" 
+                               placeholder="API Key"
+                               class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 text-base focus:ring-2 focus:ring-primary focus:border-transparent">
+                        <div class="text-xs text-gray-600 dark:text-gray-400">
+                            <a href="https://console.cloud.google.com" target="_blank" class="text-primary hover:underline">
+                                สร้าง API Key ที่ Google Cloud Console
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- File Upload -->
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/>
+                        </svg>
+                        อัพโหลดเอกสาร
+                    </h2>
+                    
+                    <div class="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
+                        <input type="file" 
+                               id="fileInput" 
+                               accept=".pdf,image/*" 
+                               class="hidden" 
+                               onchange="handleFileSelect(event)">
+                        <div id="uploadArea" onclick="document.getElementById('fileInput').click()" class="cursor-pointer">
+                            <svg class="mx-auto h-8 w-8 text-gray-400 mb-2" stroke="currentColor" fill="none" viewBox="0 0 48 48">
+                                <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                            <p class="text-sm font-medium">คลิกเพื่อเลือกไฟล์</p>
+                            <p class="text-xs text-gray-500">PDF, JPG, PNG, GIF</p>
+                        </div>
+                    </div>
+
+                    <!-- Progress Bar -->
+                    <div id="progressContainer" class="hidden mt-4">
+                        <div class="flex justify-between text-xs text-gray-600 dark:text-gray-400 mb-1">
+                            <span id="progressText">กำลังประมวลผล...</span>
+                            <span id="progressPercent">0%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                            <div id="progressBar" class="bg-primary h-2 rounded-full progress-bar" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <button id="processBtn" 
+                            onclick="processDocument()" 
+                            disabled
+                            class="w-full mt-4 bg-primary text-white px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed hover:bg-blue-600">
+                        <span id="processText">วิเคราะห์เอกสาร</span>
+                        <svg id="processSpinner" class="hidden inline w-4 h-4 ml-2 loading-spinner" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clip-rule="evenodd"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Form Controls -->
+                <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"/>
+                        </svg>
+                        การควบคุม
+                    </h2>
+                    
+                    <div class="space-y-3">
+                        <button onclick="toggleEditMode()" 
+                                id="editModeBtn"
+                                class="w-full bg-green-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-green-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" 
+                                disabled>
+                            เปิดโหมดแก้ไข
+                        </button>
+                        
+                        <button onclick="exportTemplate()" 
+                                id="exportBtn"
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" 
+                                disabled>
+                            ส่งออก Template
+                        </button>
+                        
+                        <button onclick="saveData()" 
+                                id="saveBtn"
+                                class="w-full bg-purple-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-purple-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed" 
+                                disabled>
+                            บันทึกข้อมูลฟอร์ม
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Field List -->
+                <div id="fieldList" class="hidden bg-gray-50 dark:bg-gray-800 rounded-xl p-6">
+                    <h2 class="text-xl font-semibold mb-4 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-primary" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        รายการฟิลด์ (<span id="fieldCount">0</span>)
+                    </h2>
+                    <div id="detectedFields" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
+
+            <!-- Center & Right: Document Display -->
+            <div class="xl:col-span-2">
+                <!-- Original Document Preview -->
+                <div id="originalPreview" class="hidden mb-6">
+                    <h3 class="text-lg font-semibold mb-3">เอกสารต้นฉบับ:</h3>
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                        <canvas id="originalCanvas" class="max-w-full h-auto rounded-lg border border-gray-300 dark:border-gray-600"></canvas>
+                    </div>
+                </div>
+
+                <!-- Generated Form -->
+                <div id="formPreview" class="hidden">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-lg font-semibold">ฟอร์มที่สร้างขึ้น:</h3>
+                        <div class="flex items-center space-x-2">
+                            <label class="flex items-center text-sm">
+                                <input type="checkbox" id="showBackground" onchange="toggleBackground()" class="mr-2" checked>
+                                แสดงภาพพื้นหลัง
+                            </label>
+                            <span id="scaleDisplay" class="text-sm text-gray-600 dark:text-gray-400">100%</span>
+                            <input type="range" id="scaleSlider" min="50" max="200" value="100" onchange="adjustScale()" class="w-20">
+                        </div>
+                    </div>
+                    
+                    <div class="bg-gray-50 dark:bg-gray-800 rounded-xl p-4">
+                        <div id="formContainer" class="document-container form-overlay bg-white rounded-lg overflow-hidden">
+                            <!-- Generated form will appear here -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Processing Status -->
+                <div id="processingStatus" class="hidden text-center py-12">
+                    <div class="loading-spinner w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+                    <p id="statusMessage" class="text-lg font-medium">กำลังวิเคราะห์เอกสาร...</p>
+                    <p class="text-sm text-gray-600 dark:text-gray-400 mt-2">กรุณารอสักครู่</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dark mode support
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+
+        let selectedFile = null;
+        let documentData = null;
+        let isEditMode = false;
+        let currentScale = 100;
+        let processingMode = 'simple';
+        let originalCanvas = null;
+
+        function setProcessingMode(mode) {
+            processingMode = mode;
+            const simpleBtn = document.getElementById('simpleMode');
+            const advancedBtn = document.getElementById('advancedMode');
+            const apiKeySection = document.getElementById('apiKeySection');
+            const modeDescription = document.getElementById('modeDescription');
+
+            if (mode === 'simple') {
+                simpleBtn.className = 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all bg-primary text-white';
+                advancedBtn.className = 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all text-gray-700 dark:text-gray-300';
+                apiKeySection.classList.add('hidden');
+                modeDescription.textContent = 'ใช้ Tesseract OCR - ทำงานออฟไลน์ได้';
+            } else {
+                simpleBtn.className = 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all text-gray-700 dark:text-gray-300';
+                advancedBtn.className = 'flex-1 px-3 py-2 text-sm font-medium rounded-md transition-all bg-primary text-white';
+                apiKeySection.classList.remove('hidden');
+                modeDescription.textContent = 'ใช้ Google Vision AI - ความแม่นยำสูง';
+            }
+            updateProcessButton();
+        }
+
+        function updateProgress(percent, text) {
+            const progressContainer = document.getElementById('progressContainer');
+            const progressBar = document.getElementById('progressBar');
+            const progressPercent = document.getElementById('progressPercent');
+            const progressText = document.getElementById('progressText');
+
+            if (percent === 0) {
+                progressContainer.classList.add('hidden');
+            } else {
+                progressContainer.classList.remove('hidden');
+                progressBar.style.width = percent + '%';
+                progressPercent.textContent = Math.round(percent) + '%';
+                progressText.textContent = text || 'กำลังประมวลผล...';
+            }
+        }
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            selectedFile = file;
+            updateProgress(10, 'กำลังโหลดไฟล์...');
+
+            if (file.type === 'application/pdf') {
+                processPDF(file);
+            } else if (file.type.startsWith('image/')) {
+                processImage(file);
+            }
+
+            updateProcessButton();
+        }
+
+        async function processPDF(file) {
+            try {
+                updateProgress(20, 'กำลังแปลง PDF...');
+                
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                const page = await pdf.getPage(1);
+                
+                updateProgress(40, 'กำลังสร้างภาพ...');
+                
+                const scale = 2;
+                const viewport = page.getViewport({ scale });
+                
+                originalCanvas = document.getElementById('originalCanvas');
+                const context = originalCanvas.getContext('2d');
+                originalCanvas.height = viewport.height;
+                originalCanvas.width = viewport.width;
+
+                const renderContext = {
+                    canvasContext: context,
+                    viewport: viewport
+                };
+
+                await page.render(renderContext).promise;
+                
+                updateProgress(60, 'กำลังตรวจสอบฟิลด์...');
+                
+                const pdfFields = await extractPDFFormFields(pdf);
+                if (pdfFields.length > 0) {
+                    console.log('Found PDF form fields:', pdfFields.length);
+                    documentData = {
+                        imageWidth: viewport.width,
+                        imageHeight: viewport.height,
+                        fields: pdfFields,
+                        source: 'pdf-fields'
+                    };
+                    updateProgress(100, 'เสร็จสิ้น');
+                    showResults();
+                    return;
+                }
+                
+                updateProgress(80, 'พร้อมสำหรับการวิเคราะห์');
+                document.getElementById('originalPreview').classList.remove('hidden');
+                updateProgress(0);
+                
+            } catch (error) {
+                console.error('Error processing PDF:', error);
+                updateProgress(0);
+                alert('เกิดข้อผิดพลาดในการประมวลผล PDF: ' + error.message);
+            }
+        }
+
+        async function extractPDFFormFields(pdf) {
+            try {
+                const page = await pdf.getPage(1);
+                const annotations = await page.getAnnotations();
+                const fields = [];
+                
+                annotations.forEach((annotation, index) => {
+                    if (annotation.subtype === 'Widget' && annotation.fieldType) {
+                        const rect = annotation.rect;
+                        const pageHeight = page.getViewport({ scale: 1 }).height;
+                        
+                        const field = {
+                            id: 'pdf_field_' + index,
+                            text: annotation.fieldName || annotation.alternativeText || 'Field ' + (index + 1),
+                            left: (rect[0] / page.getViewport({ scale: 1 }).width) * 100,
+                            top: ((pageHeight - rect[3]) / pageHeight) * 100,
+                            width: ((rect[2] - rect[0]) / page.getViewport({ scale: 1 }).width) * 100,
+                            height: ((rect[3] - rect[1]) / pageHeight) * 100,
+                            type: mapPDFFieldType(annotation.fieldType),
+                            required: annotation.required || false,
+                            value: annotation.fieldValue || '',
+                            source: 'pdf'
+                        };
+                        
+                        fields.push(field);
+                    }
+                });
+                
+                return fields;
+            } catch (error) {
+                console.error('Error extracting PDF fields:', error);
+                return [];
+            }
+        }
+
+        function mapPDFFieldType(pdfType) {
+            const typeMap = {
+                'Tx': 'text',
+                'Ch': 'select',
+                'Btn': 'checkbox',
+                'Sig': 'text'
+            };
+            return typeMap[pdfType] || 'text';
+        }
+
+        async function processImage(file) {
+            try {
+                updateProgress(20, 'กำลังโหลดภาพ...');
+                
+                const canvas = document.getElementById('originalCanvas');
+                const context = canvas.getContext('2d');
+                const img = new Image();
+                
+                img.onload = function() {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    context.drawImage(img, 0, 0);
+                    
+                    updateProgress(50, 'โหลดภาพเสร็จสิ้น');
+                    document.getElementById('originalPreview').classList.remove('hidden');
+                    updateProgress(0);
+                };
+                
+                img.src = URL.createObjectURL(file);
+                
+            } catch (error) {
+                console.error('Error processing image:', error);
+                updateProgress(0);
+                alert('เกิดข้อผิดพลาดในการประมวลผลภาพ: ' + error.message);
+            }
+        }
+
+        function updateProcessButton() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const processBtn = document.getElementById('processBtn');
+            const processText = document.getElementById('processText');
+
+            if (selectedFile && (processingMode === 'simple' || apiKey)) {
+                processBtn.disabled = false;
+                processText.textContent = 'วิเคราะห์เอกสาร';
+            } else {
+                processBtn.disabled = true;
+                if (!selectedFile && processingMode === 'advanced' && !apiKey) {
+                    processText.textContent = 'เลือกไฟล์และใส่ API Key';
+                } else if (!selectedFile) {
+                    processText.textContent = 'เลือกไฟล์';
+                } else if (processingMode === 'advanced' && !apiKey) {
+                    processText.textContent = 'ใส่ API Key';
+                }
+            }
+        }
+
+        document.getElementById('apiKey').addEventListener('input', updateProcessButton);
+
+        async function processDocument() {
+            if (!selectedFile) {
+                alert('กรุณาเลือกไฟล์');
+                return;
+            }
+
+            if (processingMode === 'advanced') {
+                const apiKey = document.getElementById('apiKey').value.trim();
+                if (!apiKey) {
+                    alert('กรุณาใส่ Google Vision API Key');
+                    return;
+                }
+            }
+
+            document.getElementById('processingStatus').classList.remove('hidden');
+            document.getElementById('formPreview').classList.add('hidden');
+            
+            const processBtn = document.getElementById('processBtn');
+            const processText = document.getElementById('processText');
+            const processSpinner = document.getElementById('processSpinner');
+            
+            processBtn.disabled = true;
+            processText.textContent = 'กำลังประมวลผล...';
+            processSpinner.classList.remove('hidden');
+
+            try {
+                if (processingMode === 'simple') {
+                    await processWithOCR();
+                } else {
+                    await processWithAI();
+                }
+                
+                showResults();
+                
+            } catch (error) {
+                console.error('Error processing document:', error);
+                alert('เกิดข้อผิดพลาด: ' + error.message);
+                document.getElementById('processingStatus').classList.add('hidden');
+            } finally {
+                processBtn.disabled = false;
+                processText.textContent = 'วิเคราะห์เอกสาร';
+                processSpinner.classList.add('hidden');
+            }
+        }
+
+        async function processWithOCR() {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = 'กำลังประมวลผลด้วย OCR...';
+            
+            const canvas = document.getElementById('originalCanvas');
+            
+            const worker = await Tesseract.createWorker('tha+eng');
+            
+            const { data } = await worker.recognize(canvas, {
+                logger: m => {
+                    if (m.status === 'recognizing text') {
+                        statusMessage.textContent = 'กำลังรู้จำข้อความ... ' + Math.round(m.progress * 100) + '%';
+                    }
+                }
+            });
+            
+            await worker.terminate();
+            
+            statusMessage.textContent = 'กำลังวิเคราะห์ฟิลด์...';
+            
+            documentData = processOCRResults(data, canvas.width, canvas.height);
+        }
+
+        function processOCRResults(ocrData, imageWidth, imageHeight) {
+            const fields = [];
+            const words = ocrData.words;
+            
+            const fieldPatterns = [
+                { pattern: /name|ชื่อ|นาม|Name/i, type: 'text' },
+                { pattern: /address|ที่อยู่|Address|addr/i, type: 'text' },
+                { pattern: /phone|tel|โทร|เบอร์|Phone|Tel/i, type: 'tel' },
+                { pattern: /email|อีเมล|Email|E-mail/i, type: 'email' },
+                { pattern: /date|วันที่|วัน|Date/i, type: 'date' },
+                { pattern: /age|อายุ|Age/i, type: 'number' },
+                { pattern: /id|รหัส|ID|Code/i, type: 'text' },
+                { pattern: /signature|ลายเซ็น|ลงนาม|Signature/i, type: 'text' }
+            ];
+
+            const lines = groupWordsIntoLines(words);
+            
+            lines.forEach((line, lineIndex) => {
+                const lineText = line.map(w => w.text).join(' ');
+                
+                const fieldMatch = fieldPatterns.find(fp => fp.pattern.test(lineText));
+                
+                if (fieldMatch || hasFormFieldIndicators(lineText)) {
+                    const fieldAreas = detectFieldAreas(line, lineText);
+                    
+                    fieldAreas.forEach((area, areaIndex) => {
+                        const field = {
+                            id: 'ocr_field_' + lineIndex + '_' + areaIndex,
+                            text: area.label || lineText.replace(/[_\s]+$/, '').trim(),
+                            left: (area.left / imageWidth) * 100,
+                            top: (area.top / imageHeight) * 100,
+                            width: (area.width / imageWidth) * 100,
+                            height: (area.height / imageHeight) * 100,
+                            type: fieldMatch ? fieldMatch.type : inferFieldType(area.label || lineText),
+                            source: 'ocr'
+                        };
+                        
+                        fields.push(field);
+                    });
+                }
+            });
+
+            return {
+                imageWidth,
+                imageHeight,
+                fields,
+                source: 'ocr'
+            };
+        }
+
+        function groupWordsIntoLines(words) {
+            const sortedWords = words.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+            const lines = [];
+            let currentLine = [];
+            let currentY = -1;
+            const lineThreshold = 10;
+
+            sortedWords.forEach(word => {
+                if (currentY === -1 || Math.abs(word.bbox.y0 - currentY) <= lineThreshold) {
+                    currentLine.push(word);
+                    currentY = word.bbox.y0;
+                } else {
+                    if (currentLine.length > 0) {
+                        lines.push(currentLine.sort((a, b) => a.bbox.x0 - b.bbox.x0));
+                    }
+                    currentLine = [word];
+                    currentY = word.bbox.y0;
+                }
+            });
+
+            if (currentLine.length > 0) {
+                lines.push(currentLine.sort((a, b) => a.bbox.x0 - b.bbox.x0));
+            }
+
+            return lines;
+        }
+
+        function hasFormFieldIndicators(text) {
+            const indicators = [
+                /_+/,
+                /\.+/,
+                /\[.*\]/,
+                /\(\s*\)/,
+                /:$/,
+                /\s{5,}/
+            ];
+            
+            return indicators.some(pattern => pattern.test(text));
+        }
+
+        function detectFieldAreas(words, lineText) {
+            const areas = [];
+            
+            for (let i = 0; i < words.length - 1; i++) {
+                const currentWord = words[i];
+                const nextWord = words[i + 1];
+                const gap = nextWord.bbox.x0 - currentWord.bbox.x1;
+                
+                if (gap > 50) {
+                    areas.push({
+                        label: currentWord.text,
+                        left: currentWord.bbox.x1 + 5,
+                        top: currentWord.bbox.y0,
+                        width: gap - 10,
+                        height: currentWord.bbox.y1 - currentWord.bbox.y0
+                    });
+                }
+            }
+            
+            if (areas.length === 0 && words.length > 0) {
+                const firstWord = words[0];
+                const lastWord = words[words.length - 1];
+                
+                areas.push({
+                    label: lineText.replace(/[_\s]+$/, '').trim(),
+                    left: lastWord.bbox.x1 + 10,
+                    top: firstWord.bbox.y0,
+                    width: 150,
+                    height: firstWord.bbox.y1 - firstWord.bbox.y0
+                });
+            }
+            
+            return areas;
+        }
+
+        async function processWithAI() {
+            const statusMessage = document.getElementById('statusMessage');
+            statusMessage.textContent = 'กำลังประมวลผลด้วย AI...';
+            
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const canvas = document.getElementById('originalCanvas');
+            
+            const base64Image = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+            
+            const visionData = await callGoogleVisionAPI(base64Image, apiKey);
+            
+            statusMessage.textContent = 'กำลังวิเคราะห์ผลลัพธ์...';
+            
+            documentData = processVisionResponse(visionData, canvas.width, canvas.height);
+        }
+
+        async function callGoogleVisionAPI(base64Image, apiKey) {
+            const url = 'https://vision.googleapis.com/v1/images:annotate?key=' + apiKey;
+            
+            const requestBody = {
+                requests: [
+                    {
+                        image: {
+                            content: base64Image
+                        },
+                        features: [
+                            {
+                                type: 'TEXT_DETECTION',
+                                maxResults: 100
+                            },
+                            {
+                                type: 'DOCUMENT_TEXT_DETECTION',
+                                maxResults: 100
+                            }
+                        ]
+                    }
+                ]
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error('API Error: ' + (errorData.error?.message || 'Unknown error'));
+            }
+
+            return await response.json();
+        }
+
+        function processVisionResponse(visionData, imageWidth, imageHeight) {
+            const response = visionData.responses[0];
+            if (!response.textAnnotations) {
+                throw new Error('ไม่พบข้อความในเอกสาร');
+            }
+
+            const textAnnotations = response.textAnnotations;
+            const fields = [];
+
+            for (let i = 1; i < textAnnotations.length; i++) {
+                const annotation = textAnnotations[i];
+                const text = annotation.description;
+                const boundingPoly = annotation.boundingPoly;
+                
+                if (!boundingPoly || !boundingPoly.vertices) continue;
+
+                const vertices = boundingPoly.vertices;
+                const left = Math.min(...vertices.map(v => v.x || 0));
+                const top = Math.min(...vertices.map(v => v.y || 0));
+                const right = Math.max(...vertices.map(v => v.x || 0));
+                const bottom = Math.max(...vertices.map(v => v.y || 0));
+
+                if (isLikelyFormField(text, i, textAnnotations)) {
+                    fields.push({
+                        id: 'ai_field_' + i,
+                        text: cleanFieldText(text),
+                        left: (left / imageWidth) * 100,
+                        top: (top / imageHeight) * 100,
+                        width: ((right - left) / imageWidth) * 100,
+                        height: ((bottom - top) / imageHeight) * 100,
+                        type: inferFieldType(text),
+                        source: 'ai',
+                        confidence: annotation.confidence || 0.5
+                    });
+                }
+            }
+
+            return {
+                imageWidth,
+                imageHeight,
+                fields,
+                source: 'ai'
+            };
+        }
+
+        function isLikelyFormField(text, index, allAnnotations) {
+            const strongPatterns = [
+                /name|ชื่อ|นาม/i,
+                /address|ที่อยู่/i,
+                /phone|tel|โทร|เบอร์/i,
+                /email|อีเมล/i,
+                /date|วันที่/i,
+                /signature|ลายเซ็น/i,
+                /__+/,
+                /^\s*$/,
+                /\[.*\]/,
+                /\(\s*\)/
+            ];
+
+            const weakPatterns = [
+                /:/,
+                /\.{3,}/,
+                /\s{3,}/
+            ];
+
+            if (strongPatterns.some(pattern => pattern.test(text))) {
+                return true;
+            }
+
+            if (weakPatterns.some(pattern => pattern.test(text))) {
+                const context = getContextText(index, allAnnotations);
+                return strongPatterns.some(pattern => pattern.test(context));
+            }
+
+            return false;
+        }
+
+        function getContextText(index, annotations) {
+            const contextRange = 3;
+            const start = Math.max(0, index - contextRange);
+            const end = Math.min(annotations.length, index + contextRange + 1);
+            
+            return annotations.slice(start, end)
+                .map(a => a.description)
+                .join(' ');
+        }
+
+        function cleanFieldText(text) {
+            return text.replace(/[_\.\s]+$/, '').trim() || 'Field';
+        }
+
+        function inferFieldType(text) {
+            if (text.includes('@') || /email|อีเมล/i.test(text)) return 'email';
+            if (/phone|tel|โทร|เบอร์/i.test(text) || text.match(/\d{2,}/)) return 'tel';
+            if (/date|วันที่/i.test(text) || text.match(/\d{1,2}\/\d{1,2}\/\d{2,4}/)) return 'date';
+            if (/age|อายุ/i.test(text)) return 'number';
+            return 'text';
+        }
+
+        function showResults() {
+            document.getElementById('processingStatus').classList.add('hidden');
+            document.getElementById('formPreview').classList.remove('hidden');
+            document.getElementById('fieldList').classList.remove('hidden');
+            
+            document.getElementById('editModeBtn').disabled = false;
+            document.getElementById('exportBtn').disabled = false;
+            document.getElementById('saveBtn').disabled = false;
+            
+            generatePerfectOverlayForm(documentData);
+            updateFieldList(documentData.fields);
+        }
+
+        function generatePerfectOverlayForm(data) {
+            const container = document.getElementById('formContainer');
+            const canvas = document.getElementById('originalCanvas');
+            
+            const aspectRatio = data.imageHeight / data.imageWidth;
+            container.style.width = '100%';
+            container.style.paddingBottom = (aspectRatio * 100) + '%';
+            container.style.position = 'relative';
+            
+            const backgroundUrl = canvas.toDataURL('image/jpeg', 0.9);
+            container.style.backgroundImage = 'url(' + backgroundUrl + ')';
+            container.style.backgroundSize = 'cover';
+            container.style.backgroundPosition = 'center';
+            container.style.backgroundRepeat = 'no-repeat';
+
+            container.innerHTML = '';
+
+            const form = document.createElement('form');
+            form.style.position = 'absolute';
+            form.style.top = '0';
+            form.style.left = '0';
+            form.style.width = '100%';
+            form.style.height = '100%';
+
+            data.fields.forEach((field, index) => {
+                const input = createFormField(field, index);
+                form.appendChild(input);
+            });
+
+            container.appendChild(form);
+        }
+
+        function createFormField(field, index) {
+            const input = document.createElement('input');
+            input.type = field.type;
+            input.id = field.id;
+            input.className = 'form-field';
+            input.placeholder = field.text || 'Field ' + (index + 1);
+            input.title = field.text || 'Field ' + (index + 1);
+            
+            if (field.value) {
+                input.value = field.value;
+            }
+            
+            input.style.left = field.left + '%';
+            input.style.top = field.top + '%';
+            input.style.width = Math.max(field.width, 8) + '%';
+            input.style.height = Math.max(field.height, 1.5) + '%';
+            
+            const fontSize = Math.max(field.height * 0.4, 0.6);
+            input.style.fontSize = fontSize + 'vw';
+            
+            input.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+            input.style.border = '1px solid rgba(0, 0, 0, 0.2)';
+            input.style.borderRadius = '2px';
+            input.style.padding = '1px 3px';
+            input.style.boxSizing = 'border-box';
+            input.style.fontFamily = 'inherit';
+            
+            input.setAttribute('data-field-id', field.id);
+            input.setAttribute('data-source', field.source);
+            if (field.confidence) {
+                input.setAttribute('data-confidence', field.confidence);
+            }
+            
+            return input;
+        }
+
+        function updateFieldList(fields) {
+            const fieldList = document.getElementById('detectedFields');
+            const fieldCount = document.getElementById('fieldCount');
+            
+            fieldList.innerHTML = '';
+            fieldCount.textContent = fields.length;
+
+            fields.forEach((field, index) => {
+                const fieldItem = document.createElement('div');
+                fieldItem.className = 'flex items-center justify-between p-2 bg-white dark:bg-gray-700 rounded border text-xs';
+                
+                const confidenceColor = field.confidence >= 0.8 ? 'text-green-600' : 
+                                       field.confidence >= 0.5 ? 'text-yellow-600' : 'text-red-600';
+                
+                fieldItem.innerHTML = 
+                    '<div class="flex-1 min-w-0">' +
+                        '<div class="font-medium truncate">' + (field.text || 'Field ' + (index + 1)) + '</div>' +
+                        '<div class="text-gray-500 dark:text-gray-400">' +
+                            field.source.toUpperCase() +
+                            (field.confidence ? '<span class="' + confidenceColor + '">●</span>' : '') +
+                        '</div>' +
+                    '</div>' +
+                    '<select class="text-xs px-2 py-1 border rounded ml-2" onchange="changeFieldType(\'' + field.id + '\', this.value)">' +
+                        '<option value="text"' + (field.type === 'text' ? ' selected' : '') + '>Text</option>' +
+                        '<option value="email"' + (field.type === 'email' ? ' selected' : '') + '>Email</option>' +
+                        '<option value="tel"' + (field.type === 'tel' ? ' selected' : '') + '>Phone</option>' +
+                        '<option value="date"' + (field.type === 'date' ? ' selected' : '') + '>Date</option>' +
+                        '<option value="number"' + (field.type === 'number' ? ' selected' : '') + '>Number</option>' +
+                        '<option value="checkbox"' + (field.type === 'checkbox' ? ' selected' : '') + '>Checkbox</option>' +
+                    '</select>';
+                fieldList.appendChild(fieldItem);
+            });
+        }
+
+        function changeFieldType(fieldId, newType) {
+            const field = document.getElementById(fieldId);
+            if (field) {
+                field.type = newType;
+                
+                const dataField = documentData.fields.find(f => f.id === fieldId);
+                if (dataField) {
+                    dataField.type = newType;
+                }
+            }
+        }
+
+        function toggleBackground() {
+            const container = document.getElementById('formContainer');
+            const showBackground = document.getElementById('showBackground').checked;
+            const canvas = document.getElementById('originalCanvas');
+            
+            if (showBackground) {
+                const backgroundUrl = canvas.toDataURL('image/jpeg', 0.9);
+                container.style.backgroundImage = 'url(' + backgroundUrl + ')';
+            } else {
+                container.style.backgroundImage = 'none';
+                container.style.backgroundColor = '#ffffff';
+            }
+        }
+
+        function adjustScale() {
+            const scale = document.getElementById('scaleSlider').value;
+            const container = document.getElementById('formContainer');
+            currentScale = scale;
+            
+            container.style.transform = 'scale(' + (scale / 100) + ')';
+            container.style.transformOrigin = 'top left';
+            document.getElementById('scaleDisplay').textContent = scale + '%';
+        }
+
+        function toggleEditMode() {
+            isEditMode = !isEditMode;
+            const btn = document.getElementById('editModeBtn');
+            const fields = document.querySelectorAll('.form-field');
+            
+            if (isEditMode) {
+                btn.textContent = 'ปิดโหมดแก้ไข';
+                btn.className = btn.className.replace('bg-green-600', 'bg-red-600').replace('hover:bg-green-700', 'hover:bg-red-700');
+                fields.forEach(field => {
+                    field.style.cursor = 'move';
+                    makeFieldDraggable(field);
+                });
+            } else {
+                btn.textContent = 'เปิดโหมดแก้ไข';
+                btn.className = btn.className.replace('bg-red-600', 'bg-green-600').replace('hover:bg-red-700', 'hover:bg-green-700');
+                fields.forEach(field => {
+                    field.style.cursor = 'text';
+                });
+            }
+        }
+
+        function makeFieldDraggable(element) {
+            let isDragging = false;
+            let startX, startY, startLeft, startTop;
+
+            element.addEventListener('mousedown', function(e) {
+                if (!isEditMode) return;
+                
+                isDragging = true;
+                startX = e.clientX;
+                startY = e.clientY;
+                startLeft = parseFloat(element.style.left);
+                startTop = parseFloat(element.style.top);
+                
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', onMouseUp);
+                e.preventDefault();
+            });
+
+            function onMouseMove(e) {
+                if (!isDragging) return;
+                
+                const container = document.getElementById('formContainer');
+                const rect = container.getBoundingClientRect();
+                const deltaX = e.clientX - startX;
+                const deltaY = e.clientY - startY;
+                
+                const newLeft = startLeft + (deltaX / rect.width) * 100;
+                const newTop = startTop + (deltaY / rect.height) * 100;
+                
+                element.style.left = Math.max(0, Math.min(95, newLeft)) + '%';
+                element.style.top = Math.max(0, Math.min(95, newTop)) + '%';
+            }
+
+            function onMouseUp() {
+                isDragging = false;
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', onMouseUp);
+                
+                const fieldId = element.getAttribute('data-field-id');
+                const dataField = documentData.fields.find(f => f.id === fieldId);
+                if (dataField) {
+                    dataField.left = parseFloat(element.style.left);
+                    dataField.top = parseFloat(element.style.top);
+                }
+            }
+        }
+
+        function exportTemplate() {
+            const container = document.getElementById('formContainer');
+            const canvas = document.getElementById('originalCanvas');
+            const fields = Array.from(container.querySelectorAll('.form-field'));
+            const backgroundUrl = canvas.toDataURL('image/jpeg', 0.9);
+            
+            const doc = document.implementation.createHTMLDocument('Perfect Form Template');
+            
+            doc.head.innerHTML = 
+                '<meta charset="UTF-8">' +
+                '<meta name="viewport" content="width=device-width, initial-scale=1.0">' +
+                '<title>Perfect Form Template</title>' +
+                '<style>' +
+                '* { box-sizing: border-box; margin: 0; padding: 0; }' +
+                'body { font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif; background-color: #f5f5f5; padding: 20px; }' +
+                '.form-container { position: relative; width: 100%; max-width: 1000px; margin: 0 auto; background-image: url("' + backgroundUrl + '"); background-size: cover; background-position: center; background-repeat: no-repeat; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.1); }' +
+                '.form-field { position: absolute; border: 1px solid rgba(0, 0, 0, 0.3); background-color: rgba(255, 255, 255, 0.95); border-radius: 3px; padding: 2px 6px; font-family: inherit; transition: all 0.2s ease; }' +
+                '.form-field:focus { outline: 2px solid #5D5CDE; background-color: rgba(255, 255, 255, 1); box-shadow: 0 0 0 3px rgba(93, 92, 222, 0.1); }' +
+                '.form-field:hover { border-color: #5D5CDE; background-color: rgba(255, 255, 255, 1); }' +
+                '.form-actions { margin-top: 20px; text-align: center; }' +
+                '.btn { background-color: #5D5CDE; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; margin: 0 5px; font-size: 14px; transition: background-color 0.2s; }' +
+                '.btn:hover { background-color: #4a4bc9; }' +
+                '.btn-secondary { background-color: #6c757d; }' +
+                '.btn-secondary:hover { background-color: #545b62; }' +
+                '@media print { body { background-color: white; padding: 0; } .form-actions { display: none; } .form-container { box-shadow: none; border: none; max-width: none; } }' +
+                '</style>';
+
+            let formHTML = '<div class="form-container" style="padding-bottom: ' + (documentData.imageHeight / documentData.imageWidth) * 100 + '%;"><form id="documentForm">';
+
+            fields.forEach(field => {
+                const fieldId = field.getAttribute('data-field-id');
+                const dataField = documentData.fields.find(f => f.id === fieldId);
+                
+                formHTML += '<input type="' + field.type + '" ';
+                formHTML += 'id="' + field.id + '" ';
+                formHTML += 'name="' + field.id + '" ';
+                formHTML += 'class="form-field" ';
+                formHTML += 'placeholder="' + (field.placeholder || '') + '" ';
+                formHTML += 'title="' + (field.title || '') + '" ';
+                formHTML += 'value="' + (field.value || '') + '" ';
+                formHTML += 'style="left: ' + field.style.left + '; top: ' + field.style.top + '; ';
+                formHTML += 'width: ' + field.style.width + '; height: ' + field.style.height + '; ';
+                formHTML += 'font-size: ' + field.style.fontSize + ';" ';
+                if (dataField?.required) formHTML += 'required ';
+                if (field.type === 'checkbox' && field.value) formHTML += 'checked ';
+                formHTML += '>';
+            });
+
+            formHTML += '</form></div>';
+            formHTML += '<div class="form-actions">';
+            formHTML += '<button type="button" class="btn" onclick="submitForm()">บันทึกข้อมูล</button>';
+            formHTML += '<button type="button" class="btn btn-secondary" onclick="resetForm()">ล้างข้อมูล</button>';
+            formHTML += '<button type="button" class="btn btn-secondary" onclick="printForm()">พิมพ์</button>';
+            formHTML += '</div>';
+
+            const scriptContent = 
+                'function submitForm() {' +
+                    'const form = document.getElementById("documentForm");' +
+                    'const formData = new FormData(form);' +
+                    'const data = Object.fromEntries(formData.entries());' +
+                    'console.log("Form Data:", data);' +
+                    'alert("บันทึกข้อมูลเรียบร้อยแล้ว");' +
+                '}' +
+                'function resetForm() {' +
+                    'if (confirm("ต้องการล้างข้อมูลทั้งหมดหรือไม่?")) {' +
+                        'document.getElementById("documentForm").reset();' +
+                    '}' +
+                '}' +
+                'function printForm() { window.print(); }';
+
+            doc.body.innerHTML = formHTML + '<script>' + scriptContent + '</scr' + 'ipt>';
+
+            const htmlContent = '<!DOCTYPE html>' + doc.documentElement.outerHTML;
+
+            const blob = new Blob([htmlContent], { type: 'text/html; charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'perfect-form-template-' + new Date().getTime() + '.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function saveData() {
+            const fields = Array.from(document.querySelectorAll('.form-field'));
+            const formData = {
+                metadata: {
+                    created: new Date().toISOString(),
+                    source: documentData.source,
+                    processingMode: processingMode,
+                    fieldCount: fields.length
+                },
+                fields: {}
+            };
+            
+            fields.forEach(field => {
+                formData.fields[field.id] = {
+                    value: field.value,
+                    type: field.type,
+                    placeholder: field.placeholder,
+                    position: {
+                        left: field.style.left,
+                        top: field.style.top,
+                        width: field.style.width,
+                        height: field.style.height
+                    }
+                };
+            });
+
+            const dataStr = JSON.stringify(formData, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json; charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'form-data-' + new Date().getTime() + '.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
